@@ -1,12 +1,14 @@
+import CollaboratorPresence from './features/collaboration/CollaboratorPresence';
 import { HomeDashboard, type RecentProject } from './features/home/HomeDashboard'
+import { recordRevision, listRevisions } from '@codeknit/collaboration'
 import { useEffect, useState, useRef } from 'react'
-import { ArrowLeft, Files, Search, GitBranch, Blocks, Settings, ChevronDown, Plus, Users, Wifi, Sun, Moon, Terminal, AlertCircle, Info, Play, MoreHorizontal, FileCode2, Folder, X, Command, Sparkles, Activity, Eye, Clock3, Zap, ArrowRight, UserRound, LogOut } from 'lucide-react'
+import { ArrowLeft, Files, Search, GitBranch, Blocks, Settings, ChevronDown, Plus, Users, Wifi, Sun, Moon, Terminal, AlertCircle, Info, Play, MoreHorizontal, FileCode2, Folder, X, Command, Sparkles, Activity, Eye, Clock3, History, Zap, ArrowRight, UserRound, LogOut } from 'lucide-react'
 import { AuthPortal } from './components/auth/AuthPortal'
 import { authService } from './services/authService'
 import type { UserProfile } from './types/auth.types'
 import { ProjectExplorer } from './features/workspace/ProjectExplorer'
 import { CodeEditor } from './features/workspace/CodeEditor'
-import { openProjectSession, registerProjectFile, updateCollaborativeFile } from './services/projectCollaboration'
+import { openProjectSession, registerProjectFile, updateCollaborativeFile, getCollaborativeText } from './services/projectCollaboration'
 import type { ProjectSession } from './services/projectCollaboration'
 import './App.css'
 const navigation = [
@@ -111,10 +113,35 @@ function App() {
   const [isPanelOpen, setIsPanelOpen] = useState(false)
   const [theme, setTheme] = useState('dark')
   const [activeActivity, setActiveActivity] = useState('Explorer')
+  const [revisions, setRevisions] = useState<any[]>([])
 
+  function createRevisionCheckpoint() {
+    const session = projectSessionRef.current
+    const fileId = fileIds[activeFile]
+
+    if (!session || !fileId) {
+      window.alert("Open a project file before creating a checkpoint.")
+      return
+    }
+
+    try {
+      recordRevision(session.doc, {
+        userId: currentUser?.userId || "local-preview-user",
+        fileId,
+        type: "checkpoint",
+        timestamp: Date.now(),
+        description: `Checkpoint: ${activeFile}`
+      })
+      setRevisions(listRevisions(session.doc))
+    } catch (error) {
+      console.error("Could not create revision checkpoint:", error)
+      window.alert("Could not create this checkpoint.")
+    }
+  }
   async function handleProjectOpen(root: any) {
     const session = await openProjectSession(root)
     projectSessionRef.current = session
+    setRevisions(listRevisions(session.doc))
     setFileIds({})
     console.info("CodeKnit project session ready:", session.projectId)
   }
@@ -432,10 +459,12 @@ function App() {
             <span className="tab-context"><Clock3 size={13} /> Recent files</span>
           </div>
 
-          <CodeEditor
+          <CollaboratorPresence doc={projectSessionRef.current?.doc} userName={currentUser?.name || "You"} userId={String(currentUser?.userId || "local-user")} activeFileId={fileIds[activeFile] || ""} />
+            <CodeEditor
             fileName={activeFile}
             value={code}
             theme={theme}
+            collaboration={{ doc: projectSessionRef.current?.doc, yText: projectSessionRef.current && fileIds[activeFile] ? getCollaborativeText(projectSessionRef.current, fileIds[activeFile]) : null, userId: currentUser?.userId || "local-preview-user" }}
             onChange={async (value) => {
               setFileContents(previous => ({ ...previous, [activeFile]: value }))
               const session = projectSessionRef.current
@@ -468,6 +497,7 @@ function App() {
                     { name: 'Problems', icon: AlertCircle },
                     { name: 'Output', icon: Info },
                     { name: 'Preview', icon: Eye },
+                    { name: 'Revisions', icon: History },
                   ]
                 : [{ name: 'Terminal', icon: Terminal }]
               ).map(item => (
@@ -506,7 +536,48 @@ function App() {
                     ? 'No problems detected in this UI prototype.'
                     : activePanel === 'Preview'
                       ? 'Live preview integration will be available in a later milestone.'
-                      : 'Application output will appear here.'}
+                      : activePanel === 'Revisions'
+                        ? (
+                          <div className="revision-panel">
+                            <div className="revision-panel-heading">
+                              <div>
+                                <strong>Revision checkpoints</strong>
+                                <span>Metadata history for this project</span>
+                              </div>
+                              <button
+                                type="button"
+                                className="run-button"
+                                onClick={createRevisionCheckpoint}
+                                disabled={!fileIds[activeFile]}
+                              >
+                                <Plus size={14} /> Create checkpoint
+                              </button>
+                            </div>
+                            {!fileIds[activeFile] ? (
+                              <p>Open a project file to create a checkpoint.</p>
+                            ) : revisions.filter(item => item.fileId === fileIds[activeFile]).length === 0 ? (
+                              <p>No checkpoints yet. Create one to record this file's current milestone.</p>
+                            ) : (
+                              <div className="revision-list">
+                                {revisions
+                                  .filter(item => item.fileId === fileIds[activeFile])
+                                  .slice()
+                                  .reverse()
+                                  .map(item => (
+                                    <div className="revision-item" key={item.id}>
+                                      <div className="revision-item-icon"><History size={15} /></div>
+                                      <div>
+                                        <strong>{item.description || "Revision checkpoint"}</strong>
+                                        <span>{new Date(item.timestamp).toLocaleString()}</span>
+                                        <small>{item.userId} Ã‚Â· {item.type}</small>
+                                      </div>
+                                    </div>
+                                  ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                        : 'Application output will appear here.'}
               </div>
             )}
           </section>

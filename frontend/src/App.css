@@ -1617,3 +1617,84 @@ kbd {
   cursor: pointer;
   pointer-events: auto;
 }
+/* Revision checkpoint panel */
+.revision-panel {
+  width: 100%;
+  padding: 14px 18px;
+}
+.revision-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.revision-panel-heading > div,
+.revision-item > div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.revision-panel-heading span,
+.revision-item span,
+.revision-item small {
+  font-size: 12px;
+  opacity: .7;
+}
+.revision-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.revision-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, rgba(128,128,128,.2));
+  border-radius: 9px;
+}
+.revision-item-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(112, 91, 220, .12);
+}
+.revision-item small {
+  font-size: 11px;
+}
+/* Collaborator presence */
+.ck-presence {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--text-secondary, #a1a1aa);
+  font-size: 12px;
+}
+.ck-presence-avatars {
+  display: flex;
+  align-items: center;
+  padding-left: 2px;
+}
+.ck-presence-avatar {
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--panel-bg, #18181b);
+  border-radius: 50%;
+  margin-left: -5px;
+  background: #64748b;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+}
+.ck-presence-self {
+  background: #4f46e5;
+}
+.ck-presence-label {
+  white-space: nowrap;
+}
