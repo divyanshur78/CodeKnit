@@ -1,4 +1,4 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 import * as Y from "yjs";
 import { createCollaborationSession } from "../src/index.js";
@@ -238,4 +238,105 @@ test("restores offline data before connecting provider", async () => {
   } finally {
     session.destroy();
   }
+});
+
+test("reconnects session with a new provider and cleans up the previous provider", async () => {
+  const providers = [];
+
+  const session = await createCollaborationSession({
+    projectId: "session-reconnect",
+    user: { id: "user-1", name: "User One" },
+    persist: false,
+    serverUrl: "ws://localhost:1234",
+    ticket: "old-ticket",
+
+    providerFactory: (options) => {
+      const listeners = new Map();
+
+      const fakeProvider = {
+        options,
+        connected: false,
+        destroyed: false,
+
+        connect() {
+          this.connected = true;
+        },
+
+        disconnect() {
+          this.connected = false;
+        },
+
+        destroy() {
+          this.destroyed = true;
+        },
+
+        getStatus() {
+          return this.connected ? "connected" : "disconnected";
+        },
+
+        isSynced() {
+          return false;
+        },
+
+        onStatus(callback) {
+          listeners.set("status", callback);
+          return () => listeners.delete("status");
+        },
+
+        onSync(callback) {
+          listeners.set("sync", callback);
+          return () => listeners.delete("sync");
+        }
+      };
+
+      fakeProvider.emitStatus = (value) => listeners.get("status")?.(value);
+      fakeProvider.emitSync = (value) => listeners.get("sync")?.(value);
+
+      if (options.connect !== false) fakeProvider.connect();
+      providers.push(fakeProvider);
+      return fakeProvider;
+    }
+  });
+
+  try {
+    const firstProvider = session.provider;
+
+    assert.equal(firstProvider.connected, true);
+
+    session.disconnect();
+    assert.equal(firstProvider.connected, false);
+
+    session.connect({
+      serverUrl: "ws://localhost:5678",
+      ticket: "new-ticket"
+    });
+
+    const secondProvider = session.provider;
+
+    assert.notEqual(secondProvider, firstProvider);
+    assert.equal(firstProvider.destroyed, true);
+    assert.equal(secondProvider.connected, true);
+    assert.equal(secondProvider.options.serverUrl, "ws://localhost:5678");
+    assert.equal(secondProvider.options.ticket, "new-ticket");
+
+    const statuses = [];
+    const syncStates = [];
+
+    const unsubscribeStatus = session.onStatus(value => statuses.push(value));
+    const unsubscribeSync = session.onSync(value => syncStates.push(value));
+
+    secondProvider.emitStatus("connected");
+    secondProvider.emitSync(true);
+
+    assert.deepEqual(statuses, ["connected"]);
+    assert.deepEqual(syncStates, [true]);
+
+    unsubscribeStatus();
+    unsubscribeSync();
+  } finally {
+    session.destroy();
+  }
+
+  assert.equal(providers.length, 2);
+  assert.equal(providers[1].destroyed, true);
 });
