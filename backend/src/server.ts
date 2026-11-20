@@ -3,11 +3,12 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import dotenv from "dotenv";
-import http from "http";
 import { pool } from "./config/database";
 import authRoutes from "./routes/authRoutes";
 import { authenticateToken } from "./middleware/authMiddleware";
 import projectRoutes from "./routes/projectRoutes";
+import { attachWebSocketServer } from "./websocket/wsServer";
+import { createServer } from "http";
 
 dotenv.config();
 
@@ -59,8 +60,10 @@ app.get("/api/db-health", async (_req, res) => {
   }
 });
 
-const server = http.createServer(app);
+const httpServer = createServer(app);
 
-server.listen(PORT, () => {
+attachWebSocketServer(httpServer);
+
+httpServer.listen(PORT, () => {
   console.log(`CodeKnit backend running at http://localhost:${PORT}`);
 });

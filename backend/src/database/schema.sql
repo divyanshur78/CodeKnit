@@ -52,3 +52,20 @@ CREATE TABLE IF NOT EXISTS yjs_snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_yjs_snapshots_project
 ON yjs_snapshots(project_id, id DESC);
+
+-- Temporary, single-use WebSocket authentication tickets
+CREATE TABLE IF NOT EXISTS ws_tickets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    token_hash VARCHAR(64) UNIQUE NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ws_tickets_expiry
+ON ws_tickets(expires_at);
+
+CREATE INDEX IF NOT EXISTS idx_ws_tickets_user_project
+ON ws_tickets(user_id, project_id);
