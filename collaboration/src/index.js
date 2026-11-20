@@ -33,3 +33,7 @@ export {
 export {
   createUserUndoManager
 } from "./undoManager.js";
+
+export {
+  createCollaborationProvider
+} from "./provider.js";
