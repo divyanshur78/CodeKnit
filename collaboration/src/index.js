@@ -52,3 +52,7 @@ export {
   listExecutionSnapshots,
   observeExecutionSnapshots
 } from "./executionSnapshots.js";
+
+export {
+  createCollaborationSession
+} from "./sessionManager.js";
