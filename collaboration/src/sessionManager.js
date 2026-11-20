@@ -1,4 +1,4 @@
-﻿import * as Y from "yjs";
+import * as Y from "yjs";
 import {
   FILES_KEY,
   createProjectDoc,
@@ -117,6 +117,29 @@ export async function createCollaborationSession(options) {
   const bindings = new Map();
   const undoManagers = new Map();
 
+  const statusListeners = new Set();
+  const syncListeners = new Set();
+
+  let unsubscribeProviderStatus = null;
+  let unsubscribeProviderSync = null;
+
+  function detachProviderListeners() {
+    unsubscribeProviderStatus?.();
+    unsubscribeProviderSync?.();
+    unsubscribeProviderStatus = null;
+    unsubscribeProviderSync = null;
+  }
+
+  function attachProviderListeners(nextProvider) {
+    unsubscribeProviderStatus = nextProvider.onStatus(status => {
+      for (const callback of [...statusListeners]) callback(status);
+    });
+
+    unsubscribeProviderSync = nextProvider.onSync(synced => {
+      for (const callback of [...syncListeners]) callback(synced);
+    });
+  }
+
   function assertActive() {
     if (destroyed) {
       throw new Error("The collaboration session has been destroyed.");
@@ -166,6 +189,7 @@ export async function createCollaborationSession(options) {
     }
 
     if (provider) {
+      detachProviderListeners();
       provider.destroy();
       provider = null;
     }
@@ -181,6 +205,8 @@ export async function createCollaborationSession(options) {
         ? { ProviderClass: connection.ProviderClass }
         : {})
     });
+
+    attachProviderListeners(provider);
 
     return provider;
   }
@@ -409,21 +435,23 @@ export async function createCollaborationSession(options) {
     onStatus(callback) {
       assertActive();
 
-      if (!provider) {
-        throw new Error("The WebSocket provider is not connected.");
+      if (typeof callback !== "function") {
+        throw new Error("A status listener callback is required.");
       }
 
-      return provider.onStatus(callback);
+      statusListeners.add(callback);
+      return () => statusListeners.delete(callback);
     },
 
     onSync(callback) {
       assertActive();
 
-      if (!provider) {
-        throw new Error("The WebSocket provider is not connected.");
+      if (typeof callback !== "function") {
+        throw new Error("A sync listener callback is required.");
       }
 
-      return provider.onSync(callback);
+      syncListeners.add(callback);
+      return () => syncListeners.delete(callback);
     },
 
     destroy() {
@@ -442,9 +470,12 @@ export async function createCollaborationSession(options) {
         }
       } finally {
         try {
+          detachProviderListeners();
           provider?.destroy();
         } finally {
           provider = null;
+          statusListeners.clear();
+          syncListeners.clear();
 
           try {
             if (persistence) {

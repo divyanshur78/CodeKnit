@@ -340,3 +340,96 @@ test("reconnects session with a new provider and cleans up the previous provider
   assert.equal(providers.length, 2);
   assert.equal(providers[1].destroyed, true);
 });
+
+test("preserves session status and sync listeners across provider replacement", async () => {
+  const providers = [];
+
+  const session = await createCollaborationSession({
+    projectId: "session-listener-lifecycle",
+    user: { id: "user-1", name: "User One" },
+    persist: false,
+    serverUrl: "ws://localhost:1234",
+    ticket: "first-ticket",
+
+    providerFactory: (options) => {
+      const listeners = {
+        status: new Set(),
+        sync: new Set()
+      };
+
+      const fakeProvider = {
+        options,
+        destroyed: false,
+
+        connect() {},
+        disconnect() {},
+
+        destroy() {
+          this.destroyed = true;
+        },
+
+        getStatus() {
+          return "disconnected";
+        },
+
+        isSynced() {
+          return false;
+        },
+
+        onStatus(callback) {
+          listeners.status.add(callback);
+          return () => listeners.status.delete(callback);
+        },
+
+        onSync(callback) {
+          listeners.sync.add(callback);
+          return () => listeners.sync.delete(callback);
+        },
+
+        emitStatus(value) {
+          for (const callback of listeners.status) callback(value);
+        },
+
+        emitSync(value) {
+          for (const callback of listeners.sync) callback(value);
+        }
+      };
+
+      providers.push(fakeProvider);
+      return fakeProvider;
+    }
+  });
+
+  try {
+    const statuses = [];
+    const syncStates = [];
+
+    const unsubscribeStatus = session.onStatus(value => statuses.push(value));
+    const unsubscribeSync = session.onSync(value => syncStates.push(value));
+
+    const firstProvider = session.provider;
+
+    session.connect({
+      serverUrl: "ws://localhost:5678",
+      ticket: "second-ticket"
+    });
+
+    const secondProvider = session.provider;
+
+    assert.equal(firstProvider.destroyed, true);
+
+    secondProvider.emitStatus("connected");
+    secondProvider.emitSync(true);
+
+    assert.deepEqual(statuses, ["connected"]);
+    assert.deepEqual(syncStates, [true]);
+
+    unsubscribeStatus();
+    unsubscribeSync();
+  } finally {
+    session.destroy();
+  }
+
+  assert.equal(providers.length, 2);
+  assert.equal(providers[1].destroyed, true);
+});
