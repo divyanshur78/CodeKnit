@@ -4,6 +4,7 @@ import cors from "cors";
 import helmet from "helmet";
 import dotenv from "dotenv";
 import http from "http";
+import { pool } from "./config/database";
 
 dotenv.config();
 
@@ -21,6 +22,28 @@ app.get("/api/health", (_req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });
+});
+
+app.get("/api/db-health", async (_req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT current_database() AS database, NOW() AS time"
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Database connection is healthy",
+      database: result.rows[0].database,
+      timestamp: result.rows[0].time
+    });
+  } catch (error) {
+    console.error("Database health check failed:", error);
+
+    res.status(503).json({
+      success: false,
+      message: "Database connection unavailable"
+    });
+  }
 });
 
 const server = http.createServer(app);
