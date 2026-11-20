@@ -44,3 +44,11 @@ export {
   listRevisions,
   observeRevisions
 } from "./revisions.js";
+
+export {
+  EXECUTION_SNAPSHOTS_KEY,
+  recordExecutionSnapshot,
+  getExecutionSnapshot,
+  listExecutionSnapshots,
+  observeExecutionSnapshots
+} from "./executionSnapshots.js";
