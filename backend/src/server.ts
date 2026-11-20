@@ -7,6 +7,7 @@ import http from "http";
 import { pool } from "./config/database";
 import authRoutes from "./routes/authRoutes";
 import { authenticateToken } from "./middleware/authMiddleware";
+import projectRoutes from "./routes/projectRoutes";
 
 dotenv.config();
 
@@ -18,7 +19,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
-
+app.use("/api/projects", projectRoutes);
 app.get("/api/health", (_req, res) => {
   res.status(200).json({
     success: true,
