@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { HomeDashboard, type RecentProject } from './features/home/HomeDashboard'
+import { useEffect, useState } from 'react'
 import {
   Files, Search, GitBranch, Blocks, Settings, ChevronDown,
   Plus, Users, Wifi, Sun, Moon, Terminal,
@@ -7,6 +8,8 @@ import {
   Eye, Clock3, Zap, ArrowRight, LayoutDashboard, UserRound, LogOut
 } from 'lucide-react'
 import { AuthPortal } from './components/auth/AuthPortal'
+import { authService } from './services/authService'
+import type { UserProfile } from './types/auth.types'
 import './App.css'
 
 const projectFiles = [
@@ -32,8 +35,7 @@ function App() {
   )
 }
 
-export default App`,
-  'App.css': `#root {
+export default App`,  'App.css': `#root {
   min-height: 100vh;
 }
 
@@ -81,9 +83,63 @@ const navigation = [
 
 function App() {
   const [authenticated, setAuthenticated] = useState(false)
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
+  const [previewMode, setPreviewMode] = useState(false)
+  const [authChecking, setAuthChecking] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+
+    authService.getCurrentUser()
+      .then(({ user }) => {
+        if (mounted) {
+          setCurrentUser(user)
+          setAuthenticated(true)
+        }
+      })
+      .catch(() => {
+        // No active server session.
+      })
+      .finally(() => {
+        if (mounted) setAuthChecking(false)
+      })
+
+    return () => { mounted = false }
+  }, [])
+
+  function enterPreview() {
+    setPreviewMode(true)
+    setCurrentUser(null)
+    setAuthenticated(true)
+  }
+
+  function handleAuthenticated(user: UserProfile) {
+    setCurrentUser(user)
+    setPreviewMode(false)
+    setAuthenticated(true)
+    setHomePanel('home')
+    setScreen('home')
+  }
+
+  async function handleLogout() {
+    if (!previewMode) {
+      try {
+        await authService.logout()
+      } catch {
+        // Clear the local app session even if the server is unreachable.
+      }
+    }
+
+    setAuthenticated(false)
+    setCurrentUser(null)
+    setPreviewMode(false)
+    setHomePanel('home')
+    setScreen('home')
+  }
   const [screen, setScreen] = useState('home')
   const [homePanel, setHomePanel] = useState('home')
   const [projectName, setProjectName] = useState('My Project')
+  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([])
   const [roomCode, setRoomCode] = useState('')
   const [workspaceMode, setWorkspaceMode] = useState('minimal')
   const [activeFile, setActiveFile] = useState('App.tsx')
@@ -109,7 +165,7 @@ function App() {
 
   return (
     <>
-      {!authenticated ? <AuthPortal onPreview={() => setAuthenticated(true)} /> : <>
+      {authChecking ? <div className="auth-loading-screen">Checking session...</div> : !authenticated ? <AuthPortal onPreview={enterPreview} onAuthenticated={handleAuthenticated} /> : <>
       {screen !== 'workspace' ? (
         <div className={`home-shell ${theme}`}>
           <header className="home-header">
@@ -128,53 +184,23 @@ function App() {
           </header>
 
           <main className="home-main">
-            <section className="home-welcome">
-              <span className="home-eyebrow">YOUR CREATIVE WORKSPACE</span>
-              <h1>{homePanel === 'home' ? 'What would you like to build?' : homePanel === 'new-project' ? 'Create a project' : homePanel === 'account' ? 'Your CodeKnit account' : 'Join your team'}</h1>
-              <p>{homePanel === 'home' ? 'A simple place to create, code and collaborate.' : homePanel === 'new-project' ? 'Give your workspace a name to get started.' : homePanel === 'account' ? 'Manage your profile and account details.' : 'Enter the invitation code shared by your team.'}</p>
-            </section>
+            {homePanel !== 'home' && (
+              <section className="home-welcome">
+                <span className="home-eyebrow">YOUR CREATIVE WORKSPACE</span>
+                <h1>{homePanel === 'new-project' ? 'Create a project' : homePanel === 'account' ? 'Your CodeKnit account' : 'Join your team'}</h1>
+                <p>{homePanel === 'new-project' ? 'Give your workspace a name to get started.' : homePanel === 'account' ? 'Manage your profile and account details.' : 'Enter the invitation code shared by your team.'}</p>
+              </section>
+            )}
 
             {homePanel === 'home' ? (
-              <>
-                <section className="home-actions">
-                  <button className="home-action-card primary-action" onClick={() => setHomePanel('new-project')}>
-                    <span className="home-action-icon"><Plus size={22} /></span>
-                    <strong>New Project</strong>
-                    <span>Start something from scratch</span>
-                    <ArrowRight size={17} className="home-action-arrow" />
-                  </button>
-                  <button className="home-action-card" onClick={() => setHomePanel('join-team')}>
-                    <span className="home-action-icon"><Users size={22} /></span>
-                    <strong>Join Team</strong>
-                    <span>Continue with your collaborators</span>
-                    <ArrowRight size={17} className="home-action-arrow" />
-                  </button>
-                </section>
-
-                <section className="home-recent">
-                  <div className="home-section-heading">
-                    <div><h2>Recent projects</h2><p>Pick up where you left off</p></div>
-                    <span className="home-section-label">YOUR WORK</span>
-                  </div>
-                  <button className="home-project-row" onClick={() => setScreen('workspace')}>
-                    <span className="home-project-icon"><Folder size={19} /></span>
-                    <span className="home-project-info"><strong>{projectName}</strong><small>Personal workspace · Local preview</small></span>
-                    <ArrowRight size={17} />
-                  </button>
-                </section>
-
-                <section className="home-mode">
-                  <div><strong>Workspace experience</strong><p>Choose how much you want to see.</p></div>
-                  <div className="home-mode-options">
-                    <button className={workspaceMode === 'minimal' ? 'selected' : ''} onClick={() => setWorkspaceMode('minimal')}>
-                      <Eye size={16} /><span>Minimal</span>
-                    </button>
-                    <button className={workspaceMode === 'studio' ? 'selected' : ''} onClick={() => setWorkspaceMode('studio')}>
-                      <LayoutDashboard size={16} /><span>Studio</span>
-                    </button>
-                  </div>
-                </section>
-              </>
+              <HomeDashboard
+                user={currentUser}
+                projects={recentProjects}
+                theme={theme as 'dark' | 'light'}
+                onCreateProject={() => setHomePanel('new-project')}
+                onJoinTeam={() => setHomePanel('join-team')}
+                onOpenProject={openRecentProject}
+              />
             ) : homePanel === 'new-project' ? (
               <section className="home-form-card">
                 <label htmlFor="new-project-name">Project name</label>
@@ -182,7 +208,7 @@ function App() {
                 <p className="home-form-hint">You can configure languages and templates inside your workspace.</p>
                 <div className="home-form-actions">
                   <button className="home-back-button" onClick={() => setHomePanel('home')}>Back</button>
-                  <button className="home-submit-button" disabled={!projectName.trim()} onClick={() => setScreen('workspace')}>Open workspace <ArrowRight size={16} /></button>
+                  <button className="home-submit-button" disabled={!projectName.trim()} onClick={createProject}>Open workspace <ArrowRight size={16} /></button>
                 </div>
               </section>
             ) : homePanel === 'account' ? (
@@ -190,49 +216,49 @@ function App() {
                 <div className="account-card-heading">
                   <div className="account-avatar"><UserRound size={27} /></div>
                   <div>
-                    <strong>Preview User</strong>
-                    <span>Development preview account</span>
+                    <strong>{currentUser?.fullName ?? 'Preview User'}</strong>
+                    <span>{previewMode ? 'Development preview account' : currentUser?.email}</span>
                   </div>
                 </div>
 
-                <div className="account-preview-warning">
-                  <Info size={16} />
-                  These are demonstration details, not a registered CodeKnit account.
-                </div>
+                {previewMode && (
+                  <div className="account-preview-warning">
+                    <Info size={16} />
+                    These are demonstration details, not a registered CodeKnit account.
+                  </div>
+                )}
 
                 <div className="account-details">
                   <div className="account-detail">
                     <span>Full name</span>
-                    <strong>Preview User</strong>
+                    <strong>{currentUser?.fullName ?? "Preview User"}</strong>
                   </div>
                   <div className="account-detail">
                     <span>Email address</span>
-                    <strong>preview@codeknit.dev</strong>
+                    <strong>{currentUser?.email ?? "preview@codeknit.dev"}</strong>
                   </div>
                   <div className="account-detail">
                     <span>Username</span>
-                    <strong>@preview_user</strong>
+                    <strong>{currentUser ? `@${currentUser.username}` : "@preview_user"}</strong>
                   </div>
                   <div className="account-detail">
                     <span>CodeKnit User ID</span>
-                    <strong>CK-PREVIEW-0001</strong>
+                    <strong>{currentUser?.userId ?? "CK-PREVIEW-0001"}</strong>
                   </div>
                 </div>
 
-                <div className="account-id-note">
-                  <Info size={15} />
-                  Your real User ID will be generated by the server after registration.
-                </div>
+                {previewMode && (
+                  <div className="account-id-note">
+                    <Info size={15} />
+                    Your real User ID will be generated by the server after registration.
+                  </div>
+                )}
 
                 <div className="account-actions">
                   <button className="home-back-button" onClick={() => setHomePanel('home')}>
                     Back to home
                   </button>
-                  <button className="account-logout-button" onClick={() => {
-                    setAuthenticated(false)
-                    setHomePanel('home')
-                    setScreen('home')
-                  }}>
+                  <button className="account-logout-button" onClick={() => void handleLogout()}>
                     <LogOut size={16} /> Log out
                   </button>
                 </div>
