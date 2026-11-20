@@ -11,6 +11,7 @@
     "test:watch": "node --test --watch"
   },
   "dependencies": {
+    "monaco-editor": "^0.57.0",
     "y-indexeddb": "^9.0.12",
     "y-monaco": "^0.1.6",
     "y-protocols": "^1.0.7",
