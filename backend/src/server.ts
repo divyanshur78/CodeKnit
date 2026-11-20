@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import http from "http";
 import { pool } from "./config/database";
 import authRoutes from "./routes/authRoutes";
+import { authenticateToken } from "./middleware/authMiddleware";
 
 dotenv.config();
 
@@ -24,6 +25,14 @@ app.get("/api/health", (_req, res) => {
     message: "CodeKnit backend is running",
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
+  });
+});
+
+app.get("/api/auth/me", authenticateToken, (_req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Authenticated user access granted",
+    userId: res.locals.userId
   });
 });
 
