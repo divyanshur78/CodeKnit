@@ -15,7 +15,8 @@ type FileNode = {
 }
 
 type Props = {
-  onOpenFile: (path: string, content: string, handle: AnyHandle) => void
+  onOpenFile: (path: string, content: string, handle: AnyHandle) => void | Promise<void>
+  onProjectOpen: (root: AnyHandle) => void | Promise<void>
   onRenamePath: (oldPath: string, newPath: string) => void
   onDeletePath: (path: string) => void
 }
@@ -36,7 +37,7 @@ async function readTree(directory: AnyHandle): Promise<FileNode[]> {
   const nodes: FileNode[] = []
 
   for await (const [name, handle] of directory.entries()) {
-    if (name === 'node_modules' || name === '.git' || name === 'dist')
+    if (name === 'node_modules' || name === '.git' || name === 'dist' || name === '.codeknit')
       continue
 
     if (handle.kind === 'directory') {
@@ -75,6 +76,7 @@ async function copyDirectory(source: AnyHandle, target: AnyHandle) {
 
 export function ProjectExplorer({
   onOpenFile,
+  onProjectOpen,
   onRenamePath,
   onDeletePath
 }: Props) {
@@ -96,6 +98,7 @@ export function ProjectExplorer({
         return
       }
       const directory = await picker({ mode: 'readwrite' })
+      await onProjectOpen(directory)
       setRoot(directory)
       setRootName(directory.name)
       setExpanded(new Set())
@@ -144,7 +147,7 @@ export function ProjectExplorer({
   async function openFile(path: string, handle: AnyHandle) {
     try {
       const file = await handle.getFile()
-      onOpenFile(path, await file.text(), handle)
+      await onOpenFile(path, await file.text(), handle)
     } catch (error: any) {
       window.alert(error?.message || 'Could not read this file.')
     }

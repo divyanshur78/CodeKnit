@@ -1,11 +1,13 @@
 import { HomeDashboard, type RecentProject } from './features/home/HomeDashboard'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { ArrowLeft, Files, Search, GitBranch, Blocks, Settings, ChevronDown, Plus, Users, Wifi, Sun, Moon, Terminal, AlertCircle, Info, Play, MoreHorizontal, FileCode2, Folder, X, Command, Sparkles, Activity, Eye, Clock3, Zap, ArrowRight, UserRound, LogOut } from 'lucide-react'
 import { AuthPortal } from './components/auth/AuthPortal'
 import { authService } from './services/authService'
 import type { UserProfile } from './types/auth.types'
 import { ProjectExplorer } from './features/workspace/ProjectExplorer'
 import { CodeEditor } from './features/workspace/CodeEditor'
+import { openProjectSession, registerProjectFile, updateCollaborativeFile } from './services/projectCollaboration'
+import type { ProjectSession } from './services/projectCollaboration'
 import './App.css'
 const navigation = [
   { name: 'Explorer', icon: Files, description: 'Browse project files' },
@@ -103,12 +105,26 @@ function App() {
   const [openFiles, setOpenFiles] = useState(['src/App.tsx', 'src/App.css'])
   const [fileContents, setFileContents] = useState<Record<string, string>>({})
   const [fileHandles, setFileHandles] = useState<Record<string, any>>({})
+  const projectSessionRef = useRef<ProjectSession | null>(null)
+  const [fileIds, setFileIds] = useState<Record<string, string>>({})
   const [activePanel, setActivePanel] = useState('Terminal')
   const [isPanelOpen, setIsPanelOpen] = useState(false)
   const [theme, setTheme] = useState('dark')
   const [activeActivity, setActiveActivity] = useState('Explorer')
 
-  function openFile(path: string, content: string, handle: any) {
+  async function handleProjectOpen(root: any) {
+    const session = await openProjectSession(root)
+    projectSessionRef.current = session
+    setFileIds({})
+    console.info("CodeKnit project session ready:", session.projectId)
+  }
+
+  async function openFile(path: string, content: string, handle: any) {
+    const session = projectSessionRef.current
+    if (session) {
+      const fileId = await registerProjectFile(session, path, content)
+      setFileIds(current => ({ ...current, [path]: fileId }))
+    }
     setActiveFile(path)
     setOpenFiles(current => current.includes(path) ? current : [...current, path])
     setFileContents(current => ({ ...current, [path]: content }))
@@ -363,7 +379,7 @@ function App() {
           </div>
 
           {activeActivity === 'Explorer' ? (
-            <ProjectExplorer onOpenFile={openFile} onRenamePath={renameOpenPath} onDeletePath={deleteOpenPath} />
+            <ProjectExplorer onOpenFile={openFile} onProjectOpen={handleProjectOpen} onRenamePath={renameOpenPath} onDeletePath={deleteOpenPath} />
           ) : (
             <div className="tool-placeholder">
               <div className="placeholder-icon"><Sparkles size={22} /></div>
@@ -422,6 +438,15 @@ function App() {
             theme={theme}
             onChange={async (value) => {
               setFileContents(previous => ({ ...previous, [activeFile]: value }))
+              const session = projectSessionRef.current
+              const fileId = fileIds[activeFile]
+              if (session && fileId) {
+                try {
+                  updateCollaborativeFile(session, fileId, value)
+                } catch (error) {
+                  console.error("Could not update collaborative file:", error)
+                }
+              }
               const handle = fileHandles[activeFile]
               if (handle) {
                 try {
