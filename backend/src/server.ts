@@ -5,6 +5,7 @@ import helmet from "helmet";
 import dotenv from "dotenv";
 import http from "http";
 import { pool } from "./config/database";
+import authRoutes from "./routes/authRoutes";
 
 dotenv.config();
 
@@ -14,6 +15,8 @@ const PORT = Number(process.env.PORT) || 3001;
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
+
+app.use("/api/auth", authRoutes);
 
 app.get("/api/health", (_req, res) => {
   res.status(200).json({
