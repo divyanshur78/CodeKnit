@@ -1,4 +1,4 @@
-import CollaboratorPresence from './features/collaboration/CollaboratorPresence';
+﻿import CollaboratorPresence from './features/collaboration/CollaboratorPresence';
 import { HomeDashboard, type RecentProject } from './features/home/HomeDashboard'
 import { recordRevision, listRevisions } from '@codeknit/collaboration'
 import { useEffect, useState, useRef } from 'react'
@@ -480,7 +480,7 @@ function App() {
             <span className="tab-context"><Clock3 size={13} /> Recent files</span>
           </div>
 
-          <CollaboratorPresence doc={projectSessionRef.current?.collaboration?.doc} userName={currentUser?.fullName || "You"} userId={String(currentUser?.userId || "local-user")} activeFileId={fileIds[activeFile] || ""} />
+          <CollaboratorPresence session={projectSessionRef.current?.collaboration} userName={currentUser?.fullName || "You"} activeFileId={fileIds[activeFile] || ""} />
           <CodeEditor
             fileName={activeFile}
             collaboration={projectSessionRef.current && fileIds[activeFile] ? {
@@ -585,7 +585,7 @@ function App() {
                                       <div>
                                         <strong>{item.description || "Revision checkpoint"}</strong>
                                         <span>{new Date(item.timestamp).toLocaleString()}</span>
-                                        <small>{item.userId} Ãƒâ€šÃ‚Â· {item.type}</small>
+                                        <small>{item.userId} ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· {item.type}</small>
                                       </div>
                                     </div>
                                   ))}
@@ -647,3 +647,5 @@ function App() {
 }
 
 export default App
+
+

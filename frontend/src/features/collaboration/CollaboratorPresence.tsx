@@ -1,12 +1,4 @@
-import { useEffect, useState } from "react";
-import {
-  createAwareness,
-  getConnectedUsers,
-  setLocalUser,
-  setActiveFile,
-  clearLocalPresence,
-  observePresence
-} from "@codeknit/collaboration";
+﻿import { useEffect, useState } from "react";
 
 type Collaborator = {
   clientId: number;
@@ -17,46 +9,51 @@ type Collaborator = {
 };
 
 type Props = {
-  doc: any;
+  session: any;
   userName: string;
-  userId: string;
   activeFileId: string;
 };
 
 export default function CollaboratorPresence({
-  doc,
+  session,
   userName,
-  userId,
   activeFileId
 }: Props) {
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
 
+  // Subscribe to the Awareness instance owned by the collaboration session.
   useEffect(() => {
-    if (!doc) {
+    if (!session || session.destroyed) {
       setCollaborators([]);
       return;
     }
 
-    const awareness = createAwareness(doc);
+    const updateCollaborators = () => {
+      setCollaborators(
+        session.getConnectedUsers() as Collaborator[]
+      );
+    };
 
-    setLocalUser(awareness, {
-      id: userId,
-      name: userName,
-      color: "#4F46E5"
-    });
+    const unsubscribe = session.observePresence(updateCollaborators);
 
-    if (activeFileId) {
-      setActiveFile(awareness, activeFileId);
-    }
-
-    const unsubscribe = observePresence(awareness, () => setCollaborators(getConnectedUsers(awareness) as Collaborator[]));
+    // Get the current state immediately.
+    updateCollaborators();
 
     return () => {
       unsubscribe();
-      clearLocalPresence(awareness);
-      awareness.destroy();
     };
-  }, [doc, userName, userId, activeFileId]);
+  }, [session]);
+
+  // The session itself owns local user identity and Awareness lifecycle.
+  useEffect(() => {
+    if (!session || session.destroyed || !activeFileId) return;
+
+    try {
+      session.setActiveFile(activeFileId);
+    } catch (error) {
+      console.error("Unable to update active collaboration file:", error);
+    }
+  }, [session, activeFileId]);
 
   return (
     <div className="ck-presence" title="Project collaborators">
@@ -64,6 +61,7 @@ export default function CollaboratorPresence({
         <span className="ck-presence-avatar ck-presence-self">
           {userName.charAt(0).toUpperCase()}
         </span>
+
         {collaborators.slice(0, 3).map((person) => (
           <span
             className="ck-presence-avatar"
@@ -75,6 +73,7 @@ export default function CollaboratorPresence({
           </span>
         ))}
       </div>
+
       <span className="ck-presence-label">
         {collaborators.length
           ? `${collaborators.length + 1} collaborators`
