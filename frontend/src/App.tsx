@@ -5,63 +5,8 @@ import { AuthPortal } from './components/auth/AuthPortal'
 import { authService } from './services/authService'
 import type { UserProfile } from './types/auth.types'
 import { ProjectExplorer } from './features/workspace/ProjectExplorer'
+import { CodeEditor } from './features/workspace/CodeEditor'
 import './App.css'
-
-const sampleCode: Record<string, string> = {
-  'App.tsx': `import { ArrowLeft, useState } from 'react'
-
-function App() {
-  const [message, setMessage] = useState('Hello, CodeKnit!')
-
-  return (
-    <main>
-      <h1>{message}</h1>
-      <button onClick={() => setMessage('Ready to collaborate!')}>
-        Get started
-      </button>
-    </main>
-  )
-}
-
-export default App`,  'App.css': `#root {
-  min-height: 100vh;
-}
-
-main {
-  padding: 2rem;
-}
-
-h1 {
-  font-size: 2rem;
-  color: #60a5fa;
-}`,
-  'main.tsx': `import { ArrowLeft, StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import App from './App'
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-)`,
-  'index.css': `:root {
-  font-family: Inter, system-ui, sans-serif;
-  color: #d4d4d4;
-  background: #1e1e1e;
-}`,
-  'package.json': `{
-  "name": "codeknit",
-  "private": true,
-  "version": "0.0.0",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint ."
-  }
-}`,
-  'README.md': '# CodeKnit\n\nAn offline-first collaborative coding platform.'
-}
-
 const navigation = [
   { name: 'Explorer', icon: Files, description: 'Browse project files' },
   { name: 'Search', icon: Search, description: 'Find code and files' },
@@ -154,28 +99,69 @@ function App() {
     setHomePanel('home')
   }
   const [roomCode, setRoomCode] = useState('')
-  const [activeFile, setActiveFile] = useState('App.tsx')
-  const [openFiles, setOpenFiles] = useState(['App.tsx', 'App.css'])
+  const [activeFile, setActiveFile] = useState('src/App.tsx')
+  const [openFiles, setOpenFiles] = useState(['src/App.tsx', 'src/App.css'])
+  const [fileContents, setFileContents] = useState<Record<string, string>>({})
+  const [fileHandles, setFileHandles] = useState<Record<string, any>>({})
   const [activePanel, setActivePanel] = useState('Terminal')
   const [isPanelOpen, setIsPanelOpen] = useState(false)
   const [theme, setTheme] = useState('dark')
   const [activeActivity, setActiveActivity] = useState('Explorer')
 
-  function openFile(name: string) {
-    setActiveFile(name)
-    setOpenFiles(current => current.includes(name) ? current : [...current, name])
+  function openFile(path: string, content: string, handle: any) {
+    setActiveFile(path)
+    setOpenFiles(current => current.includes(path) ? current : [...current, path])
+    setFileContents(current => ({ ...current, [path]: content }))
+    setFileHandles(current => ({ ...current, [path]: handle }))
   }
 
-  function closeFile(name: string) {
-    const remaining = openFiles.filter(file => file !== name)
+  function closeFile(path: string) {
+    const index = openFiles.indexOf(path)
+    const remaining = openFiles.filter(file => file !== path)
     setOpenFiles(remaining)
-    if (activeFile === name && remaining.length) {
-      setActiveFile(remaining[remaining.length - 1])
+
+    if (activeFile === path) {
+      setActiveFile(remaining[Math.max(0, index - 1)] || '')
     }
   }
 
-  const code = sampleCode[activeFile] || '// Select a file from Explorer'
+  function renameOpenPath(oldPath: string, newPath: string) {
+    const updatePath = (path: string) =>
+      path === oldPath || path.startsWith(`${oldPath}/`)
+        ? `${newPath}${path.slice(oldPath.length)}`
+        : path
 
+    setOpenFiles(current => current.map(updatePath))
+    setActiveFile(current => updatePath(current))
+    setFileContents(current => {
+      const next: Record<string, string> = {}
+      Object.entries(current).forEach(([path, content]) => {
+        next[updatePath(path)] = content
+      })
+      return next
+    })
+  }
+
+  function deleteOpenPath(deletedPath: string) {
+    const isDeleted = (path: string) =>
+      path === deletedPath || path.startsWith(`${deletedPath}/`)
+
+    const remaining = openFiles.filter(path => !isDeleted(path))
+    setOpenFiles(remaining)
+
+    if (isDeleted(activeFile)) {
+      setActiveFile(remaining[remaining.length - 1] || '')
+    }
+
+    setFileContents(current =>
+      Object.fromEntries(
+        Object.entries(current).filter(([path]) => !isDeleted(path))
+      )
+    )
+  }
+
+  const activeFileName = activeFile.split(/[\\/]/).pop() || ''
+  const code = activeFile ? fileContents[activeFile] ?? '' : ''
   return (
     <>
       {authChecking ? <div className="auth-loading-screen">Checking session...</div> : !authenticated ? <AuthPortal onPreview={enterPreview} onAuthenticated={handleAuthenticated} /> : <>
@@ -377,7 +363,7 @@ function App() {
           </div>
 
           {activeActivity === 'Explorer' ? (
-            <ProjectExplorer onOpenFile={openFile} />
+            <ProjectExplorer onOpenFile={openFile} onRenamePath={renameOpenPath} onDeletePath={deleteOpenPath} />
           ) : (
             <div className="tool-placeholder">
               <div className="placeholder-icon"><Sparkles size={22} /></div>
@@ -398,8 +384,8 @@ function App() {
           <div className="editor-heading">
             <div className="editor-heading-copy">
               <span className="eyebrow">CODE WORKSPACE / SRC</span>
-              <h1>{activeFile}</h1>
-              <span className="editor-subtitle">Editing project source</span>
+              <h1>{activeFileName || "No file selected"}</h1>
+              <span className="editor-subtitle">{activeFile || "Select a file from Explorer"}</span>
             </div>
             <div className="editor-actions">
               <span className="prototype-label"><span /> UI prototype</span>
@@ -417,30 +403,39 @@ function App() {
                   onClick={() => setActiveFile(file)}
                 >
                   <FileCode2 size={15} />
-                  <span>{file}</span>
+                  <span title={file}>{file.split(/[\\/]/).pop()}</span>
                   <span className="tab-close" onClick={event => { event.stopPropagation(); closeFile(file) }}>
                     <X size={13} />
                   </span>
                 </button>
               ))}
-              <button className="new-tab" title="Open package.json" onClick={() => openFile('package.json')}>
+              <button className="new-tab" title="Select a file in Explorer" onClick={() => setActiveActivity('Explorer')}>
                 <Plus size={16} />
               </button>
             </div>
             <span className="tab-context"><Clock3 size={13} /> Recent files</span>
           </div>
 
-          <section className="editor">
-            <div className="editor-content">
-              <div className="line-numbers">
-                {code.split('\n').map((_, i) => <div key={i}>{String(i + 1).padStart(2, '0')}</div>)}
-              </div>
-              <pre className="code-content">{code}</pre>
-            </div>
-            <div className="editor-minimap"><div className="minimap-lines" /></div>
-          </section>
+          <CodeEditor
+            fileName={activeFile}
+            value={code}
+            theme={theme}
+            onChange={async (value) => {
+              setFileContents(previous => ({ ...previous, [activeFile]: value }))
+              const handle = fileHandles[activeFile]
+              if (handle) {
+                try {
+                  const writer = await handle.createWritable()
+                  await writer.write(value)
+                  await writer.close()
+                } catch (error) {
+                  console.error('Could not save file:', error)
+                }
+              }
+            }}
+          />
 
-          <section className={`bottom-panel ${isPanelOpen ? 'expanded' : 'collapsed'}`}>
+<section className={`bottom-panel ${isPanelOpen ? 'expanded' : 'collapsed'}`}>
             <div className="panel-tabs">
               {(isPanelOpen
                 ? [

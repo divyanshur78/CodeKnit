@@ -1,0 +1,60 @@
+.monaco-editor-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.monaco-canvas {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.code-editor-statusbar {
+  height: 27px;
+  min-height: 27px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 13px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
+.monaco-dark .code-editor-statusbar {
+  color: #cbd5e1;
+  background: #202638;
+  border-top: 1px solid #343e54;
+}
+
+.monaco-light .code-editor-statusbar {
+  color: #4b556b;
+  background: #e9eaf7;
+  border-top: 1px solid #d5d8ed;
+}
+
+.editor-language {
+  font-weight: 700;
+  color: #a78bfa;
+}
+
+.monaco-light .editor-language {
+  color: #7045cf;
+}
+
+.editor-status-spacer {
+  flex: 1;
+}
+
+@media (max-width: 650px) {
+  .code-editor-statusbar {
+    gap: 9px;
+    font-size: 10px;
+    padding: 0 8px;
+  }
+}
