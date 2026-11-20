@@ -1,0 +1,80 @@
+﻿import * as Y from "yjs";
+
+export function createUserUndoManager(doc, yText, userId) {
+  if (!(doc instanceof Y.Doc)) {
+    throw new Error("A valid Yjs document is required.");
+  }
+
+  if (!(yText instanceof Y.Text)) {
+    throw new Error("A valid Y.Text instance is required.");
+  }
+
+  if (!userId || typeof userId !== "string") {
+    throw new Error("A valid user ID is required.");
+  }
+
+  const origin = Object.freeze({ userId });
+  const trackedOrigins = new Set([origin]);
+
+  const undoManager = new Y.UndoManager(yText, {
+    trackedOrigins,
+    captureTimeout: 0
+  });
+
+  function transact(callback) {
+    if (typeof callback !== "function") {
+      throw new Error("A transaction callback is required.");
+    }
+
+    doc.transact(callback, origin);
+  }
+
+  function trackOrigin(transactionOrigin) {
+    if (
+      transactionOrigin === null ||
+      transactionOrigin === undefined
+    ) {
+      throw new Error("A valid transaction origin is required.");
+    }
+
+    trackedOrigins.add(transactionOrigin);
+  }
+
+  function untrackOrigin(transactionOrigin) {
+    if (transactionOrigin !== origin) {
+      trackedOrigins.delete(transactionOrigin);
+    }
+  }
+
+  return {
+    userId,
+    undoManager,
+    transact,
+    trackOrigin,
+    untrackOrigin,
+
+    undo() {
+      undoManager.undo();
+    },
+
+    redo() {
+      undoManager.redo();
+    },
+
+    canUndo() {
+      return undoManager.undoStack.length > 0;
+    },
+
+    canRedo() {
+      return undoManager.redoStack.length > 0;
+    },
+
+    stopCapturing() {
+      undoManager.stopCapturing();
+    },
+
+    destroy() {
+      undoManager.destroy();
+    }
+  };
+}
