@@ -37,3 +37,10 @@ export {
 export {
   createCollaborationProvider
 } from "./provider.js";
+export {
+  REVISIONS_KEY,
+  recordRevision,
+  getRevision,
+  listRevisions,
+  observeRevisions
+} from "./revisions.js";
