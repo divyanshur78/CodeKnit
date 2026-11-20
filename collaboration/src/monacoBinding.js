@@ -1,8 +1,9 @@
-﻿export async function bindYTextToMonaco({
+export async function bindYTextToMonaco({
   yText,
   editor,
   awareness = undefined,
-  undoManager = undefined
+  undoManager = undefined,
+  MonacoBindingClass = undefined
 }) {
   const Y = await import("yjs");
 
@@ -22,24 +23,49 @@
 
   if (
     undoManager !== undefined &&
-    (!undoManager || typeof undoManager.trackOrigin !== "function")
+    (
+      !undoManager ||
+      typeof undoManager.trackOrigin !== "function" ||
+      typeof undoManager.untrackOrigin !== "function"
+    )
   ) {
     throw new Error("A valid user UndoManager wrapper is required.");
   }
 
-  const { MonacoBinding } = await import("y-monaco");
+  const BindingClass = MonacoBindingClass ??
+    (await import("y-monaco")).MonacoBinding;
 
-  const binding = new MonacoBinding(
+  if (typeof BindingClass !== "function") {
+    throw new Error("A valid Monaco binding class is required.");
+  }
+
+  const binding = new BindingClass(
     yText,
     model,
     new Set([editor]),
     awareness
   );
 
-  // y-monaco uses the MonacoBinding instance as its Yjs
-  // transaction origin. Register it with this user's UndoManager.
-  if (undoManager) {
-    undoManager.trackOrigin(binding);
+  const originalDestroy = binding.destroy.bind(binding);
+  let destroyed = false;
+
+  binding.destroy = () => {
+    if (destroyed) return;
+
+    destroyed = true;
+
+    try {
+      originalDestroy();
+    } finally {
+      undoManager?.untrackOrigin(binding);
+    }
+  };
+
+  try {
+    undoManager?.trackOrigin(binding);
+  } catch (error) {
+    binding.destroy();
+    throw error;
   }
 
   return binding;

@@ -1,4 +1,4 @@
-﻿import * as Y from "yjs";
+import * as Y from "yjs";
 
 export function createUserUndoManager(doc, yText, userId) {
   if (!(doc instanceof Y.Doc)) {
@@ -9,7 +9,11 @@ export function createUserUndoManager(doc, yText, userId) {
     throw new Error("A valid Y.Text instance is required.");
   }
 
-  if (!userId || typeof userId !== "string") {
+  if (yText.doc !== doc) {
+    throw new Error("The Y.Text must belong to the supplied Yjs document.");
+  }
+
+  if (!userId || typeof userId !== "string" || !userId.trim()) {
     throw new Error("A valid user ID is required.");
   }
 
@@ -46,6 +50,8 @@ export function createUserUndoManager(doc, yText, userId) {
     }
   }
 
+  let destroyed = false;
+
   return {
     userId,
     undoManager,
@@ -54,27 +60,30 @@ export function createUserUndoManager(doc, yText, userId) {
     untrackOrigin,
 
     undo() {
-      undoManager.undo();
+      if (!destroyed) undoManager.undo();
     },
 
     redo() {
-      undoManager.redo();
+      if (!destroyed) undoManager.redo();
     },
 
     canUndo() {
-      return undoManager.undoStack.length > 0;
+      return !destroyed && undoManager.undoStack.length > 0;
     },
 
     canRedo() {
-      return undoManager.redoStack.length > 0;
+      return !destroyed && undoManager.redoStack.length > 0;
     },
 
     stopCapturing() {
-      undoManager.stopCapturing();
+      if (!destroyed) undoManager.stopCapturing();
     },
 
     destroy() {
+      if (destroyed) return;
+      destroyed = true;
       undoManager.destroy();
+      trackedOrigins.clear();
     }
   };
 }
