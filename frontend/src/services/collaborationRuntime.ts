@@ -1,65 +1,30 @@
-import {
-  bindYTextToMonaco,
-  createAwareness,
-  setLocalUser,
-  setActiveFile,
-  clearLocalPresence,
-  getConnectedUsers,
-  observePresence,
-  createUserUndoManager
-} from "@codeknit/collaboration"
-
-export function createProjectAwareness(
-  doc: any,
-  user: { id: string; name: string; color: string }
+﻿export async function attachMonacoToSession(
+  session: any,
+  fileId: string,
+  editor: any
 ) {
-  const awareness = createAwareness(doc)
-  setLocalUser(awareness, user)
-  return awareness
-}
-
-export function activateCollaborativeFile(
-  awareness: any,
-  fileId: string
-) {
-  setActiveFile(awareness, fileId)
-}
-
-export function watchCollaborators(
-  awareness: any,
-  callback: (users: any[]) => void
-) {
-  const update = () => callback(getConnectedUsers(awareness))
-  const unsubscribe = observePresence(awareness, update)
-  update()
-  return unsubscribe
-}
-
-export async function attachMonacoToSharedText(
-  doc: any,
-  yText: any,
-  editor: any,
-  awareness: any,
-  userId: string
-) {
-  const undo = createUserUndoManager(doc, yText, userId)
-  const binding = await bindYTextToMonaco({
-    yText,
-    editor,
-    awareness,
-    undoManager: undo.undoManager
-  })
+  const binding = await session.bindEditor(fileId, editor)
 
   return {
     binding,
-    undo,
     dispose() {
-      binding.destroy?.()
-      undo.destroy?.()
+      session.unbindEditor(fileId)
     }
   }
 }
 
-export function clearProjectPresence(awareness: any) {
-  clearLocalPresence(awareness)
+export function watchSessionCollaborators(
+  session: any,
+  callback: (users: any[]) => void
+) {
+  const unsubscribe = session.observePresence(callback)
+  callback(session.getConnectedUsers())
+  return unsubscribe
+}
+
+export function activateSessionFile(
+  session: any,
+  fileId: string
+) {
+  session.setActiveFile(fileId)
 }

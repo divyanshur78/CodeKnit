@@ -8,7 +8,7 @@ import { authService } from './services/authService'
 import type { UserProfile } from './types/auth.types'
 import { ProjectExplorer } from './features/workspace/ProjectExplorer'
 import { CodeEditor } from './features/workspace/CodeEditor'
-import { openProjectSession, registerProjectFile, updateCollaborativeFile, getCollaborativeText } from './services/projectCollaboration'
+import { openProjectSession, registerProjectFile, closeProjectSession } from './services/projectCollaboration'
 import type { ProjectSession } from './services/projectCollaboration'
 import './App.css'
 const navigation = [
@@ -59,6 +59,7 @@ function App() {
   }
 
   async function handleLogout() {
+    await closeActiveProjectSession()
     if (!previewMode) {
       try {
         await authService.logout()
@@ -109,6 +110,20 @@ function App() {
   const [fileHandles, setFileHandles] = useState<Record<string, any>>({})
   const projectSessionRef = useRef<ProjectSession | null>(null)
   const [fileIds, setFileIds] = useState<Record<string, string>>({})
+  async function closeActiveProjectSession() {
+    const session = projectSessionRef.current
+    projectSessionRef.current = null
+
+    if (session) {
+      try {
+        await closeProjectSession(session)
+      } catch (error) {
+        console.error("Could not close collaboration session:", error)
+      }
+    }
+
+    setFileIds({})
+  }
   const [activePanel, setActivePanel] = useState('Terminal')
   const [isPanelOpen, setIsPanelOpen] = useState(false)
   const [theme, setTheme] = useState('dark')
@@ -125,23 +140,27 @@ function App() {
     }
 
     try {
-      recordRevision(session.doc, {
+      recordRevision(session.collaboration.doc, {
         userId: currentUser?.userId || "local-preview-user",
         fileId,
         type: "checkpoint",
         timestamp: Date.now(),
         description: `Checkpoint: ${activeFile}`
       })
-      setRevisions(listRevisions(session.doc))
+      setRevisions(listRevisions(session.collaboration.doc))
     } catch (error) {
       console.error("Could not create revision checkpoint:", error)
       window.alert("Could not create this checkpoint.")
     }
   }
   async function handleProjectOpen(root: any) {
-    const session = await openProjectSession(root)
+    await closeActiveProjectSession()
+    const session = await openProjectSession(root, {
+      id: currentUser?.userId ?? "CK-PREVIEW-0001",
+      name: currentUser?.fullName ?? "Preview User"
+    })
     projectSessionRef.current = session
-    setRevisions(listRevisions(session.doc))
+    setRevisions(listRevisions(session.collaboration.doc))
     setFileIds({})
     console.info("CodeKnit project session ready:", session.projectId)
   }
@@ -362,8 +381,10 @@ function App() {
       <button
   className="workspace-back-icon"
   onClick={() => {
-    setScreen('home')
-    setHomePanel('home')
+    void closeActiveProjectSession().finally(() => {
+      setScreen('home')
+      setHomePanel('home')
+    })
   }}
   title="Back to Home"
   aria-label="Back to Home"
@@ -459,23 +480,18 @@ function App() {
             <span className="tab-context"><Clock3 size={13} /> Recent files</span>
           </div>
 
-          <CollaboratorPresence doc={projectSessionRef.current?.doc} userName={currentUser?.name || "You"} userId={String(currentUser?.userId || "local-user")} activeFileId={fileIds[activeFile] || ""} />
-            <CodeEditor
+          <CollaboratorPresence doc={projectSessionRef.current?.collaboration?.doc} userName={currentUser?.fullName || "You"} userId={String(currentUser?.userId || "local-user")} activeFileId={fileIds[activeFile] || ""} />
+          <CodeEditor
             fileName={activeFile}
+            collaboration={projectSessionRef.current && fileIds[activeFile] ? {
+              session: projectSessionRef.current.collaboration,
+              fileId: fileIds[activeFile]
+            } : undefined}
             value={code}
             theme={theme}
-            collaboration={{ doc: projectSessionRef.current?.doc, yText: projectSessionRef.current && fileIds[activeFile] ? getCollaborativeText(projectSessionRef.current, fileIds[activeFile]) : null, userId: currentUser?.userId || "local-preview-user" }}
             onChange={async (value) => {
               setFileContents(previous => ({ ...previous, [activeFile]: value }))
-              const session = projectSessionRef.current
-              const fileId = fileIds[activeFile]
-              if (session && fileId) {
-                try {
-                  updateCollaborativeFile(session, fileId, value)
-                } catch (error) {
-                  console.error("Could not update collaborative file:", error)
-                }
-              }
+
               const handle = fileHandles[activeFile]
               if (handle) {
                 try {
@@ -569,7 +585,7 @@ function App() {
                                       <div>
                                         <strong>{item.description || "Revision checkpoint"}</strong>
                                         <span>{new Date(item.timestamp).toLocaleString()}</span>
-                                        <small>{item.userId} Ã‚Â· {item.type}</small>
+                                        <small>{item.userId} Ãƒâ€šÃ‚Â· {item.type}</small>
                                       </div>
                                     </div>
                                   ))}

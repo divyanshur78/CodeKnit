@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
-import { attachMonacoToSharedText } from '../../services/collaborationRuntime'
+import { attachMonacoToSession } from '../../services/collaborationRuntime'
 import './CodeEditor.css'
 
 interface CodeEditorProps {
@@ -9,9 +9,8 @@ interface CodeEditorProps {
   theme: string
   onChange: (value: string) => void
   collaboration?: {
-    doc: any
-    yText: any
-    userId: string
+    session: any
+    fileId: string
   }
 }
 
@@ -27,36 +26,50 @@ function getLanguage(fileName: string): string {
     vue: 'html', svelte: 'html', graphql: 'graphql', toml: 'ini',
     dockerfile: 'dockerfile', bat: 'bat'
   }
+
   return languages[extension || ''] || 'plaintext'
 }
 
-export function CodeEditor({ fileName, value, theme, onChange, collaboration }: CodeEditorProps) {
+export function CodeEditor({
+  fileName,
+  value,
+  theme,
+  onChange,
+  collaboration
+}: CodeEditorProps) {
   const [cursor, setCursor] = useState({ line: 1, column: 1 })
   const [editorInstance, setEditorInstance] = useState<any>(null)
   const language = getLanguage(fileName)
 
   const handleEditorMount: OnMount = (editor) => {
     setEditorInstance(editor)
+
     editor.onDidChangeCursorPosition(({ position }) => {
-      setCursor({ line: position.lineNumber, column: position.column })
+      setCursor({
+        line: position.lineNumber,
+        column: position.column
+      })
     })
   }
 
   useEffect(() => {
-    if (!editorInstance || !collaboration?.yText) return
+    if (!editorInstance || !collaboration?.session || !collaboration.fileId) {
+      return
+    }
 
     let cancelled = false
     let attachment: any
 
-    attachMonacoToSharedText(
-      collaboration.doc,
-      collaboration.yText,
-      editorInstance,
-      undefined,
-      collaboration.userId
+    attachMonacoToSession(
+      collaboration.session,
+      collaboration.fileId,
+      editorInstance
     ).then(result => {
-      if (cancelled) result.dispose()
-      else attachment = result
+      if (cancelled) {
+        result.dispose()
+      } else {
+        attachment = result
+      }
     }).catch(error => {
       console.error('Could not attach collaborative editor:', error)
     })
@@ -65,7 +78,11 @@ export function CodeEditor({ fileName, value, theme, onChange, collaboration }: 
       cancelled = true
       attachment?.dispose()
     }
-  }, [editorInstance, collaboration?.doc, collaboration?.yText, collaboration?.userId])
+  }, [
+    editorInstance,
+    collaboration?.session,
+    collaboration?.fileId
+  ])
 
   return (
     <section className={`editor monaco-editor-shell ${theme === 'dark' ? 'monaco-dark' : 'monaco-light'}`}>
@@ -129,6 +146,7 @@ export function CodeEditor({ fileName, value, theme, onChange, collaboration }: 
           }}
         />
       </div>
+
       <footer className="code-editor-statusbar">
         <span className="editor-language">{language.toUpperCase()}</span>
         <span>Ln {cursor.line}, Col {cursor.column}</span>

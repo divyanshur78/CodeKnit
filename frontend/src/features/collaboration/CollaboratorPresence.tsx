@@ -1,6 +1,7 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   createAwareness,
+  getConnectedUsers,
   setLocalUser,
   setActiveFile,
   clearLocalPresence,
@@ -48,7 +49,7 @@ export default function CollaboratorPresence({
       setActiveFile(awareness, activeFileId);
     }
 
-    const unsubscribe = observePresence(awareness, setCollaborators);
+    const unsubscribe = observePresence(awareness, () => setCollaborators(getConnectedUsers(awareness) as Collaborator[]));
 
     return () => {
       unsubscribe();

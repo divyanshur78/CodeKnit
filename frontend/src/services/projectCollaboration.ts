@@ -1,15 +1,8 @@
-import {
-  createProjectDoc,
-  addFile,
-  getFile,
-  getFileContent,
-  renameFile,
-  updateFileLanguage,
-  deleteFile,
-  createOfflinePersistence,
-  waitForOfflineSync,
-  destroyOfflinePersistence
-} from "@codeknit/collaboration"
+import { getFile } from "@codeknit/collaboration"
+import * as collaborationPackage from "@codeknit/collaboration"
+
+const createCollaborationSession =
+  (collaborationPackage as any).createCollaborationSession
 
 import {
   loadProjectManifest,
@@ -22,26 +15,69 @@ type DirectoryHandle = any
 
 export type ProjectSession = {
   projectId: string
-  doc: any
-  persistence: any
+  collaboration: any
   manifest: any
   root: DirectoryHandle
 }
 
+export type CollaborationUser = {
+  id: string
+  name: string
+  color?: string
+}
+
+function getLanguage(path: string): string {
+  const extension = path.split(".").pop()?.toLowerCase()
+
+  const languages: Record<string, string> = {
+    ts: "typescript",
+    tsx: "typescript",
+    js: "javascript",
+    jsx: "javascript",
+    py: "python",
+    html: "html",
+    css: "css",
+    json: "json",
+    md: "markdown",
+    sql: "sql",
+    xml: "xml",
+    yml: "yaml",
+    yaml: "yaml",
+    java: "java",
+    cpp: "cpp",
+    c: "c",
+    cs: "csharp",
+    go: "go",
+    rs: "rust",
+    php: "php",
+    rb: "ruby"
+  }
+
+  return languages[extension || ""] || "plaintext"
+}
+
 export async function openProjectSession(
-  root: DirectoryHandle
+  root: DirectoryHandle,
+  user: CollaborationUser
 ): Promise<ProjectSession> {
   const manifest = await loadProjectManifest(root)
-  const doc = createProjectDoc()
-  doc.getMap("project").set("id", manifest.projectId)
 
-  const persistence = createOfflinePersistence(doc, manifest.projectId)
-  await waitForOfflineSync(persistence)
+  const collaboration = await createCollaborationSession({
+    projectId: manifest.projectId,
+    user: {
+      id: user.id,
+      name: user.name,
+      color: user.color || "#4f8cff"
+    },
+    persist: true,
+    connect: false
+  })
+
+  collaboration.doc.getMap("project").set("id", manifest.projectId)
 
   return {
     projectId: manifest.projectId,
-    doc,
-    persistence,
+    collaboration,
     manifest,
     root
   }
@@ -51,33 +87,24 @@ export async function registerProjectFile(
   session: ProjectSession,
   path: string,
   content: string,
-  language = "plaintext"
+  language = getLanguage(path)
 ): Promise<string> {
-  const id = await getStableFileId(session.root, session.manifest, path)
+  const id = await getStableFileId(
+    session.root,
+    session.manifest,
+    path
+  )
 
-  if (!getFile(session.doc, id)) {
-    addFile(session.doc, { id, name: path, language, content })
+  if (!session.collaboration.getFile(id)) {
+    session.collaboration.addFile({
+      id,
+      name: path,
+      language,
+      content
+    })
   }
 
   return id
-}
-
-export function updateCollaborativeFile(
-  session: ProjectSession,
-  fileId: string,
-  content: string
-): void {
-  const file = getFile(session.doc, fileId)
-  if (!file) throw new Error(`Collaborative file not found: ${fileId}`)
-
-  const text = file.get("content")
-  if (!text) throw new Error("Collaborative file has no text content")
-
-  const previous = text.toString()
-  if (previous === content) return
-
-  if (previous.length) text.delete(0, previous.length)
-  if (content.length) text.insert(0, content)
 }
 
 export async function renameCollaborativeFile(
@@ -86,8 +113,14 @@ export async function renameCollaborativeFile(
   oldPath: string,
   newPath: string
 ): Promise<void> {
-  renameFile(session.doc, fileId, newPath)
-  await renameManifestPath(session.root, session.manifest, oldPath, newPath)
+  session.collaboration.renameFile(fileId, newPath)
+
+  await renameManifestPath(
+    session.root,
+    session.manifest,
+    oldPath,
+    newPath
+  )
 }
 
 export async function deleteCollaborativeFile(
@@ -95,19 +128,27 @@ export async function deleteCollaborativeFile(
   fileId: string,
   path: string
 ): Promise<void> {
-  deleteFile(session.doc, fileId)
-  await removeManifestPath(session.root, session.manifest, path)
+  session.collaboration.deleteFile(fileId)
+
+  await removeManifestPath(
+    session.root,
+    session.manifest,
+    path
+  )
 }
 
-export function getCollaborativeText(session: ProjectSession, fileId: string): any {
-  return getFile(session.doc, fileId)?.get('content') ?? null
+export function getCollaborativeText(
+  session: ProjectSession,
+  fileId: string
+): any {
+  return getFile(session.collaboration.doc, fileId)?.get("content") ?? null
 }
 
 export function readCollaborativeFile(
   session: ProjectSession,
   fileId: string
 ): string {
-  return getFileContent(session.doc, fileId) ?? ""
+  return session.collaboration.getFileContent(fileId) ?? ""
 }
 
 export function setCollaborativeFileLanguage(
@@ -115,12 +156,35 @@ export function setCollaborativeFileLanguage(
   fileId: string,
   language: string
 ): void {
-  updateFileLanguage(session.doc, fileId, language)
+  session.collaboration.updateFileLanguage(fileId, language)
 }
 
 export async function closeProjectSession(
   session: ProjectSession
 ): Promise<void> {
-  destroyOfflinePersistence(session.persistence)
-  session.doc.destroy()
+  session.collaboration.destroy()
+}
+
+
+export function updateCollaborativeFile(
+  session: ProjectSession,
+  fileId: string,
+  content: string
+) {
+  const file = getFile(session.collaboration.doc, fileId)
+  if (!file) return
+
+  const yText = file.get("content")
+  if (!yText) return
+
+  const nextContent = String(content ?? "")
+
+  if (yText.toString() === nextContent) return
+
+  session.collaboration.doc.transact(() => {
+    yText.delete(0, yText.length)
+    if (nextContent.length > 0) {
+      yText.insert(0, nextContent)
+    }
+  })
 }
