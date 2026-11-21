@@ -69,3 +69,6 @@ ON ws_tickets(expires_at);
 
 CREATE INDEX IF NOT EXISTS idx_ws_tickets_user_project
 ON ws_tickets(user_id, project_id);
+
+ALTER TABLE yjs_snapshots
+ADD COLUMN IF NOT EXISTS last_update_id BIGINT NOT NULL DEFAULT 0;
